@@ -1,0 +1,61 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SCRAPER Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+  <h1 class="text-3xl font-bold mb-8">SCRAPER Dashboard </h1>
+  <div id="posts-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8"></div>
+  <div class="flex justify-center mt-8">
+    <button id="load-more" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Load More</button>
+  </div>
+
+  <script>
+    const postsContainer = document.getElementById('posts-container');
+    const loadMoreButton = document.getElementById('load-more');
+    let page = 1;
+    const limit = 9;
+
+    async function fetchPosts() {
+      const response = await fetch(`https://ekqpaxwmblelcxbfxdun.supabase.co/rest/v1/redditscraper?select=*&limit=${limit}&offset=${(page - 1) * limit}`, {
+        headers: {
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrcXBheHdtYmxlbGN4YmZ4ZHVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU2NTM5NzQsImV4cCI6MjA1MTIyOTk3NH0.aBxxX8gyeKAF3Filj4_k3Cf8mUS9retqPIGftIWf_hs',
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrcXBheHdtYmxlbGN4YmZ4ZHVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU2NTM5NzQsImV4cCI6MjA1MTIyOTk3NH0.aBxxX8gyeKAF3Filj4_k3Cf8mUS9retqPIGftIWf_hs'
+        }
+      });
+      const data = await response.json();
+      return data;
+    }
+
+    async function displayPosts() {
+      const posts = await fetchPosts();
+      posts.forEach(post => {
+        const card = document.createElement('div');
+        card.classList.add('bg-white', 'rounded-lg', 'shadow-md', 'p-6');
+        card.innerHTML = `
+          <h2 class="text-xl font-bold mb-2">${post.post_title}</h2>
+          <p class="text-gray-600 mb-4">Post ID: ${post.post_id}</p>
+          <p class="text-gray-600 mb-4">Timestamp: ${new Date(post.post_timestamp).toLocaleString()}</p>
+          <p class="text-gray-600 mb-4">Tickers: ${post.tickers.join(', ')}</p>
+          <p class="text-gray-600 mb-4">Comment Count: ${post.comment_count}</p>
+          <p class="text-gray-600 mb-4">Upvote Ratio: ${post.upvote_ratio}</p>
+          <p class="text-gray-600 mb-4">Score: ${post.score}</p>
+          <p class="text-gray-600 mb-4">Flair: ${post.flair}</p>
+        `;
+        postsContainer.appendChild(card);
+      });
+    }
+
+    displayPosts();
+
+    loadMoreButton.addEventListener('click', () => {
+      page++;
+      displayPosts();
+    });
+  </script>
+</body>
+</html>
