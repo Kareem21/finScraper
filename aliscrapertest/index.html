@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>WSB Dashboard</title>
+ <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+ <div id="root">
+   <h1 class="text-3xl font-bold mb-4">WSB Dashboard</h1>
+   <div id="stats" class="bg-white rounded-lg shadow-lg p-6 mb-4">
+     <div id="total-posts" class="text-xl mb-4"></div>
+     <div id="score-explanation" class="mb-2"></div>
+   <div id="top-stats" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+  <div id="top-comments" class="bg-blue-50 p-4 rounded"></div>
+  <div id="top-upvotes" class="bg-green-50 p-4 rounded"></div>
+  <div id="top-ticker-posts" class="bg-yellow-50 p-4 rounded"></div>
+  <div id="top-ticker-comments" class="bg-orange-50 p-4 rounded"></div>
+</div>
+     </div>
+   </div>
+   
+   <div class="mb-4 flex gap-4">
+     <select id="flairFilter" class="p-2 rounded border">
+       <option value="">All Flairs</option>
+     </select>
+     
+     <input type="text" 
+            id="tickerSearch" 
+            placeholder="Search by ticker..." 
+            class="p-2 rounded border"
+     >
+   </div>
+   <div id="tickerStats" class="mb-4 text-sm text-gray-600"></div>
+   
+   <div id="featured-posts" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8"></div>
+   <div id="main-content" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+ </div>
+
+ <script>
+   const SUPABASE_URL = 'https://ekqpaxwmblelcxbfxdun.supabase.co';
+   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrcXBheHdtYmxlbGN4YmZ4ZHVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU2NTM5NzQsImV4cCI6MjA1MTIyOTk3NH0.aBxxX8gyeKAF3Filj4_k3Cf8mUS9retqPIGftIWf_hs';
+   
+   let posts = [];
+   async function fetchTickerStats(ticker) {
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/post_comments?select=*&body=ilike.*${ticker}*`, // Look for ticker anywhere in comment body
+      {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`
+        }
+      }
+    );
+       
+       const comments = await response.json();
+       
+       if (comments.length === 0) {
+         document.getElementById('tickerStats').textContent = `No comments found for ticker "${ticker}"`;
+         document.getElementById('main-content').innerHTML = '';
+         return;
+       }
+
+       const uniquePosts = new Set(comments.map(c => c.post_id));
+       document.getElementById('tickerStats').textContent = 
+         `Mentioned in: ${comments.length} comments across ${uniquePosts.size} posts`;
+
+       // Show both posts and comments
+       const relatedPosts = posts.filter(post => 
+         uniquePosts.has(post.post_id) || (post.tickers && post.tickers.includes(ticker))
+       );
+
+       const content = `
+         <div class="mb-8">
+           <h2 class="text-xl font-bold mb-4">Related Posts</h2>
+           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+             ${relatedPosts.map(post => createCard(post)).join('')}
+           </div>
+         </div>
+         
+         <div>
+           <h2 class="text-xl font-bold mb-4">Comments Mentioning ${ticker}</h2>
+           <div class="space-y-4">
+             ${comments.map(comment => createCommentCard(comment, ticker)).join('')}
+           </div>
+         </div>
+       `;
+
+       document.getElementById('main-content').innerHTML = content;
+
+     } catch (error) {
+       document.getElementById('tickerStats').textContent = 'Error fetching ticker data';
+       console.error('Error:', error);
+     }
+   }
+
+   function createCommentCard(comment, highlightTicker) {
+     const timestamp = new Date(comment.created_at).toLocaleString();
+     const highlightedBody = comment.body.replace(
+       new RegExp(`\\b${highlightTicker}\\b`, 'gi'),
+       match => `<span class="bg-yellow-200 font-bold">${match}</span>`
+     );
+
+     return `
+       <div class="bg-white rounded-lg shadow p-4">
+         <p class="text-sm text-gray-600 mb-2">Created: ${timestamp}</p>
+         <p class="mb-2">${highlightedBody}</p>
+         <p class="text-sm text-gray-600">Score: ${comment.score}</p>
+       </div>
+     `;
+   }
+
+   function createCard(post, bgColor = 'bg-white', label = '') {
+     const timestamp = new Date(post.post_timestamp).toLocaleString();
+     return `
+       <div class="${bgColor} rounded-lg shadow-lg p-6 relative">
+         ${label ? `<div class="absolute top-0 right-0 bg-gray-800 text-white px-3 py-1 rounded-bl-lg rounded-tr-lg">${label}</div>` : ''}
+         <h2 class="text-lg font-bold mb-2">${post.post_title}</h2>
+         <p>Posted: ${timestamp}</p>
+         <p>Comments: ${post.comment_count}</p>
+         <p>Score: ${post.score}</p>
+         <p>Total Upvotes: ${post.total_upvotes || 'N/A'}</p>
+         <p>Total Downvotes: ${post.total_downvotes || 'N/A'}</p>
+         <p>Upvote Ratio: ${(post.upvote_ratio * 100).toFixed(1)}%</p>
+         <p>Tickers: ${post.tickers?.join(', ') || 'None'}</p>
+         <p>Flair: ${post.flair || 'None'}</p>
+         <a href="${post.post_url}" target="_blank" class="text-blue-500 hover:text-blue-700 mt-2 inline-block">View →</a>
+       </div>
+     `;
+   }
+
+   function getTopTicker(posts) {
+     const tickerCount = {};
+     posts.forEach(post => {
+       if (post.tickers) {
+         post.tickers.forEach(ticker => {
+           tickerCount[ticker] = (tickerCount[ticker] || 0) + 1;
+         });
+       }
+     });
+     const sortedTickers = Object.entries(tickerCount).sort((a, b) => b[1] - a[1]);
+     return sortedTickers.length > 0 ? sortedTickers[0] : ['None', 0];
+   }
+
+   function updateDisplay(postsToDisplay) {
+     const totalPosts = document.getElementById('total-posts');
+     const featuredPosts = document.getElementById('featured-posts');
+     const mainContent = document.getElementById('main-content');
+     const scoreExplanation = document.getElementById('score-explanation');
+     const topComments = document.getElementById('top-comments');
+     const topUpvotes = document.getElementById('top-upvotes');
+     const topTickerPosts = document.getElementById('top-ticker-posts');
+     const topTickerComments = document.getElementById('top-ticker-comments');
+
+     if (postsToDisplay.length === 0) {
+       mainContent.innerHTML = '<div class="text-center text-gray-500">No posts found</div>';
+       return;
+     }
+
+     totalPosts.textContent = `Total Posts: ${postsToDisplay.length}`;
+     scoreExplanation.textContent = `Score = Total Upvotes - Total Downvotes`;
+
+     const mostCommented = postsToDisplay.reduce((max, post) => post.comment_count > max.comment_count ? post : max, postsToDisplay[0]);
+     const highestUpvotes = postsToDisplay.reduce((max, post) => (post.total_upvotes || 0) > (max.total_upvotes || 0) ? post : max, postsToDisplay[0]);
+     const [topTickerName, topTickerCount] = getTopTicker(postsToDisplay);
+
+     topComments.innerHTML = `<strong>Top Comments:</strong> ${mostCommented.comment_count}`;
+     topUpvotes.innerHTML = `<strong>Top Upvotes:</strong> ${highestUpvotes.total_upvotes || 'N/A'}`;
+     topTickerPosts.innerHTML = `<strong>Most Mentioned Ticker:</strong> ${topTickerName} (${topTickerCount} mentions)`;
+
+     featuredPosts.innerHTML = `
+       ${createCard(mostCommented, 'bg-blue-50', '🏆 Most Commented')}
+       ${createCard(highestUpvotes, 'bg-purple-50', '⭐ Highest Upvotes')}
+     `;
+
+     mainContent.innerHTML = postsToDisplay
+       .map(post => createCard(post))
+       .join('');
+   }
+
+   document.getElementById('tickerSearch').addEventListener('input', (e) => {
+     const ticker = e.target.value.toUpperCase();
+     if (ticker.length >= 2) {
+       fetchTickerStats(ticker);
+     } else {
+       document.getElementById('tickerStats').textContent = '';
+       updateDisplay(posts);
+     }
+   });
+
+   async function init() {
+     try {
+       posts = await fetchAllPosts();
+       posts.sort((a, b) => b.score - a.score);
+       initializeFlairFilter(posts);
+       updateDisplay(posts);
+     } catch (error) {
+       console.error('Error initializing dashboard:', error);
+     }
+   }
+
+   async function fetchAllPosts() {
+     const response = await fetch(
+       `${SUPABASE_URL}/rest/v1/redditscraper?select=*&order=score.desc`,
+       {
+         headers: {
+           'apikey': SUPABASE_KEY,
+           'Authorization': `Bearer ${SUPABASE_KEY}`
+         }
+       }
+     );
+     return await response.json();
+   }
+
+   function initializeFlairFilter(posts) {
+     const flairs = new Set(posts.map(post => post.flair).filter(Boolean));
+     const filterSelect = document.getElementById('flairFilter');
+     
+     flairs.forEach(flair => {
+       const option = document.createElement('option');
+       option.value = flair;
+       option.textContent = flair;
+       filterSelect.appendChild(option);
+     });
+
+     filterSelect.addEventListener('change', (e) => {
+       const selectedFlair = e.target.value;
+       const filteredPosts = selectedFlair 
+         ? posts.filter(post => post.flair === selectedFlair)
+         : posts;
+       updateDisplay(filteredPosts);
+     });
+   }
+
+   init();
+ </script>
+</body>
+</html>
